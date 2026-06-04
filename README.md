@@ -9,7 +9,7 @@ This project consists of two core automation pipelines designed to demonstrate e
 ```mermaid
 graph TD
     %% Monster Radar Pipeline
-    subgraph Monster Radar (B2C Retail Monitoring)
+    subgraph monster_radar [Monster Radar B2C Retail Monitoring]
         A[Schedule Trigger] -->|Twice Daily| B[Scrape zlacnene.sk]
         B --> C[Parse Discount Data]
         C --> D[Deduplicate Alert]
@@ -20,7 +20,7 @@ graph TD
     end
 
     %% Portfolio Tracker Pipeline
-    subgraph Portfolio Tracker (B2B Telemetry & CRM)
+    subgraph portfolio_tracker [Portfolio Tracker B2B Telemetry & CRM]
         H[Website Frontend] -->|AJAX Webhook| I[Normalize Geolocation]
         I -->|Filter out User IP| J{Self Visitor?}
         J -->|No| K[Query ipwho.is HTTPS]
