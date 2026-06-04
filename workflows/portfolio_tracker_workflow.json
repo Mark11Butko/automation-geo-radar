@@ -1,0 +1,278 @@
+{
+  "id": "pP5tmGtJfoiwU7PK",
+  "name": "Portfolio Tracker (Smart Edition)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "portfolio-tracker",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Invisible Click (Emails & Social)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        928
+      ],
+      "id": "542875c4-196f-4176-aa24-61c711e3764b",
+      "webhookId": "760176c0-2cd0-49f2-849c-b44947ac7d22"
+    },
+    {
+      "parameters": {
+        "path": "84a66337-a92d-4db0-b4c8-29f8c0902468",
+        "formTitle": "Prístup k portfóliu | Mark Butko",
+        "formDescription": "Zadajte svoj pracovný e-mail. Po odoslaní budete automaticky presmerovaní.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "E-mail",
+              "fieldType": "email",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "redirect",
+              "redirectUrl": "https://mark-butko-cv.carrd.co/"
+            }
+          }
+        }
+      },
+      "name": "QR Form (Profesia Days)",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        1280
+      ],
+      "id": "e73ae33e-77be-4add-8057-2aca83b4b53b",
+      "webhookId": "84a66337-a92d-4db0-b4c8-29f8c0902468"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "options": {
+          "responseCode": 302,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Location",
+                "value": "https://mark-butko-cv.carrd.co/"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Redirect (For Invisible Clicks)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        832
+      ],
+      "id": "9224030c-63cc-4d5a-aec0-2a015daacf1a"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let headers = $json.headers || {};\nlet body = $json.body || {};\n\nlet ip = headers['cf-connecting-ip'] || headers['x-forwarded-for'] || 'Unknown';\nif (ip !== 'Unknown' && ip.includes(',')) {\n  ip = ip.split(',')[0].trim();\n}\n\nlet userAgent = body.ua || headers['user-agent'] || 'Unknown';\nlet event = body.event || 'page_load';\nlet referrer = body.ref || headers['referer'] || 'direct';\nlet lang = body.lang || headers['accept-language'] || 'Unknown';\nlet resolution = body.resolution || 'Unknown';\n\nreturn {\n  json: {\n    ip: ip,\n    userAgent: userAgent,\n    event: event,\n    referrer: referrer,\n    lang: lang,\n    resolution: resolution\n  }\n};"
+      },
+      "name": "Data Normalizer (Smart)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        1024
+      ],
+      "id": "3c6fa66f-79be-4ace-89a4-36ec22167e81"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Mark Butko - n8n Business Automation Developer (CV & Portfolio)",
+        "message": "<div style=\"font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px;\">\n  <p>Dobrý deň,</p>\n  <p>bolo mi potešením sa s Vami stretnúť.</p>\n  <p>Ako sme sa rozprávali, tu sú moje kontakty a odkazy:</p>\n  <ul style=\"list-style: none; padding: 0;\">\n    <li style=\"margin-bottom: 10px;\">🔗 <strong>LinkedIn:</strong> <a href=\"https://www.linkedin.com/in/butko-mark-49183a34a\" style=\"color: #0077b5; text-decoration: none;\">Môj profil</a></li>\n    <li style=\"margin-bottom: 10px;\">📄 <strong>Moje portfólio:</strong> <a href=\"https://mark-butko-cv.carrd.co/\" style=\"color: #d93025; text-decoration: none;\">Pozrieť si detaily</a></li>\n  </ul>\n  <p>S pozdravom,<br><strong>Mark Butko</strong></p>\n</div>",
+        "options": {}
+      },
+      "name": "Send Gmail (Only for QR)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        1280
+      ],
+      "id": "bc90bd50-2ae5-42e8-829f-17769ee9133f",
+      "webhookId": "46e68033-b576-42c7-ba2a-927dea7e577d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ibFcTbyMeLiBGc0A",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "464591691",
+        "text": "=🔍 <b>АКТИВНОСТЬ НА САЙТЕ (TRACKER)</b>\n\n⚡ <b>Событие:</b> {{ $('Data Normalizer (Smart)').first().json.event }}\n🔗 <b>Источник:</b> {{ $('Data Normalizer (Smart)').first().json.referrer }}\n🏢 <b>Организация:</b> {{ $json.org || 'N/A' }} / {{ $json.isp || 'N/A' }}\n📍 <b>Локация:</b> {{ $json.city || 'N/A' }}, {{ $json.country || 'N/A' }}\n🖥️ <b>Устройство:</b> {{ $('Data Normalizer (Smart)').first().json.userAgent || 'N/A' }}\n📏 <b>Экран:</b> {{ $('Data Normalizer (Smart)').first().json.resolution || 'N/A' }}\n🌐 <b>Язык:</b> {{ $('Data Normalizer (Smart)').first().json.lang || 'N/A' }}\n🛡️ <b>VPN/Бот:</b> {{ $json.proxy ? 'Да 🤖' : 'Нет 👤' }}\n🌐 <b>IP:</b> {{ $('Data Normalizer (Smart)').first().json.ip || 'N/A' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Telegram Alert (Rich)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        1024
+      ],
+      "id": "220c4b42-2d1e-4566-9277-ffdfae8b2289",
+      "webhookId": "36e6738c-10f5-4c44-b81d-ec05c09cc624",
+      "credentials": {
+        "telegramApi": {
+          "id": "jAw6zo0OMq6Aa64b",
+          "name": "Telegram account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://ip-api.com/json/{{ $json.ip }}?fields=status,message,country,city,isp,org,as,mobile,proxy,hosting",
+        "options": {}
+      },
+      "name": "IP Geolocation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -64,
+        1024
+      ],
+      "id": "7be38629-157a-46bf-9660-03b6f7ae0f06"
+    },
+    {
+      "parameters": {
+        "chatId": "464591691",
+        "text": "=\"🔥 <b>ŽIVOTOPIS OTVORENÝ (QR FORM)</b>\\n📧 <b>E-mail:</b> \" + $json[\"E-mail\"]",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Telegram Alert (QR Form)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        1280
+      ],
+      "id": "a47f576a-0f9a-4273-a2a4-1281678016c3",
+      "webhookId": "36e6738c-10f5-4c44-b81d-ec05c09cc624",
+      "credentials": {
+        "telegramApi": {
+          "id": "jAw6zo0OMq6Aa64b",
+          "name": "Telegram account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "portfolio-tracker-post",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Website Telemetry (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        1088
+      ],
+      "id": "972e2f0d-ee5c-474a-854f-06c1b25ac3b3",
+      "webhookId": "ac6b3e06-3d89-4a2c-bc17-56b14091c9d2"
+    }
+  ],
+  "connections": {
+    "Invisible Click (Emails & Social)": {
+      "main": [
+        [
+          {
+            "node": "Redirect (For Invisible Clicks)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Data Normalizer (Smart)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Normalizer (Smart)": {
+      "main": [
+        [
+          {
+            "node": "IP Geolocation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IP Geolocation": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert (Rich)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QR Form (Profesia Days)": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert (QR Form)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alert (QR Form)": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail (Only for QR)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website Telemetry (POST)": {
+      "main": [
+        [
+          {
+            "node": "Data Normalizer (Smart)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": 1,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

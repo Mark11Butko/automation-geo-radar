@@ -1,0 +1,1630 @@
+{
+  "name": "Monster Hunter SK v2.0",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            },
+            {
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "418c20b5-9188-4233-a87e-ea8245376569",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtDayOfWeek": 5,
+              "triggerAtHour": 17
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        160
+      ],
+      "id": "45c70fd2-6649-4591-a1ae-e04a6191f1cd",
+      "name": "Friday Digest Trigger"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query",
+          "pre_checkout_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        320
+      ],
+      "id": "1d775007-a8a0-4f79-be9a-910dd4a4966b",
+      "name": "Telegram Trigger",
+      "webhookId": "0e587542-25da-43b6-bf0f-6c68c018b675",
+      "credentials": {
+        "telegramApi": {
+          "id": "42i0LN7BYNpRENjQ",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// INPUT ROUTER v2.0\n// Parses ALL event types: message, callback, payment, checkout\n// NEW: detects chat.type for private/group access split\n// ══════════════════════════════════════════════════════════\nconst item = $input.first().json;\n\n// ── Pre-checkout (Stars payment confirmation) ───────────────\nif (item.pre_checkout_query) {\n  return [{ json: {\n    type: 'pre_checkout',\n    preCheckoutId: item.pre_checkout_query.id,\n    chatId: item.pre_checkout_query.from.id,\n    username: item.pre_checkout_query.from.username || 'user',\n    firstName: item.pre_checkout_query.from.first_name || ''\n  }}];\n}\n\n// ── Successful Stars payment ────────────────────────────────\nif (item.message && item.message.successful_payment) {\n  return [{ json: {\n    type: 'payment_success',\n    chatId: item.message.chat.id,\n    username: item.message.from.username || 'buyer',\n    firstName: item.message.from.first_name || '',\n    chatType: item.message.chat.type\n  }}];\n}\n\n// ── Callback query (inline buttons) ─────────────────────────\nif (item.callback_query) {\n  const data = item.callback_query.data || '';\n  const chatType = item.callback_query.message.chat.type;\n  return [{ json: {\n    type: data.startsWith('ch_') ? 'chart' : 'button',\n    chatId: item.callback_query.message.chat.id,\n    username: item.callback_query.from.username || 'user',\n    firstName: item.callback_query.from.first_name || '',\n    callbackData: data,\n    callbackQueryId: item.callback_query.id,\n    chatType\n  }}];\n}\n\n// ── Regular message ──────────────────────────────────────────\nif (item.message && item.message.text) {\n  const text = item.message.text;\n  const chatType = item.message.chat.type; // private | group | supergroup\n  const chatId   = item.message.chat.id;\n  const username = item.message.from.username   || 'user';\n  const firstName = item.message.from.first_name || '';\n\n  let type = null;\n  if (text.startsWith('/start'))       type = 'start';\n  else if (text.startsWith('/scan'))   type = 'button';\n  else if (text.startsWith('/help') || text.startsWith('/info')) type = 'info';\n  else return [];\n\n  // Group/supergroup hit start or scan → paywall check path\n  if ((chatType === 'group' || chatType === 'supergroup') && (type === 'start' || type === 'button')) {\n    type = 'group_check';\n  }\n\n  return [{ json: { type, chatId, username, firstName, chatType, callbackData: null, callbackQueryId: null } }];\n}\n\nreturn [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        320
+      ],
+      "id": "435f55e3-d561-4462-8a2d-fc65730d84b8",
+      "name": "Input Router"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "button",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "group_check",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "pre_checkout",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "payment_success",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "chart",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        440,
+        320
+      ],
+      "id": "067a8bab-f1cd-427b-a3e8-f5d77be38eb5",
+      "name": "Action Switch"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        660,
+        100
+      ],
+      "id": "7fd4ef75-7b5f-4aa6-9dde-ea8bbeb42de4",
+      "name": "CRM Read",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// ACCESS GATE v2.0\n// - Private chat: ALWAYS allowed (free)\n// - Group/supergroup: check CRM for active subscription\n// - Manual delete from sheet = instant revocation\n// ══════════════════════════════════════════════════════════\nconst router = $('Input Router').first().json;\nconst targetChatId = router.chatId.toString();\nconst chatType = router.chatType || 'private';\n\n// Private chats are always free — no CRM check needed\nif (chatType === 'private') {\n  return [{ json: { access: 'granted', chatId: router.chatId, username: router.username, firstName: router.firstName, chatType } }];\n}\n\n// For groups: check CRM\nlet rows = [];\ntry {\n  rows = $input.all().map(i => i.json).filter(r => r && r.chat_id);\n} catch(e) { rows = []; }\n\nconst found = rows.find(r => r.chat_id && r.chat_id.toString() === targetChatId);\n\nif (!found) {\n  return [{ json: { access: 'denied_not_found', chatId: router.chatId, username: router.username, firstName: router.firstName, chatType } }];\n}\n\nconst today = new Date().toISOString().split('T')[0];\nconst validStatuses = ['premium', 'admin_premium'];\n\nif (validStatuses.includes(found.status)) {\n  if (found.expiry_date && found.expiry_date < today) {\n    return [{ json: { access: 'denied_expired', chatId: router.chatId, username: router.username, firstName: router.firstName, chatType } }];\n  }\n  return [{ json: { access: 'granted', chatId: router.chatId, username: router.username, firstName: router.firstName, chatType } }];\n}\n\nreturn [{ json: { access: 'denied_unpaid', chatId: router.chatId, username: router.username, firstName: router.firstName, chatType } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ],
+      "id": "170d0418-0611-4955-a2fc-31c3c624c6a8",
+      "name": "Access Gate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.access }}",
+              "rightValue": "granted",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        100
+      ],
+      "id": "26dc6e1e-e431-4247-93de-2b708654cad2",
+      "name": "Access Granted?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// PAYWALL CHECK v2.0\n// 1. Check if my account (464591691) is admin in the group\n//    → If yes: grant admin_premium (free)\n// 2. If not admin: send Stars invoice (252 ⭐)\n// ══════════════════════════════════════════════════════════\nconst router = $('Input Router').first().json;\nconst chatId = router.chatId;\nconst MY_USER_ID = 464591691;\nconst BOT_TOKEN = '8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc';\n\n// Check admins via Telegram API\nlet admins = [];\ntry {\n  const resp = await $helpers.httpRequest({\n    method: 'GET',\n    url: `https://api.telegram.org/bot${BOT_TOKEN}/getChatAdministrators`,\n    qs: { chat_id: chatId }\n  });\n  admins = resp.result || [];\n} catch(e) {\n  admins = [];\n}\n\nconst isMeAdmin = admins.some(a => a.user && a.user.id === MY_USER_ID);\n\nif (isMeAdmin) {\n  return [{ json: { action: 'grant_admin', chatId, username: router.username } }];\n} else {\n  return [{ json: { action: 'send_invoice', chatId, username: router.username } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        320
+      ],
+      "id": "36918a5a-b37c-41ee-ae03-fecde7b68856",
+      "name": "Paywall Check"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "grant_admin",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send_invoice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        880,
+        320
+      ],
+      "id": "3991a3ca-993c-4353-b584-f723153a67b4",
+      "name": "Paywall Switch"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chatId }}",
+            "username": "={{ $json.username }}",
+            "status": "admin_premium",
+            "expiry_date": "2099-12-31"
+          },
+          "matchingColumns": [
+            "chat_id"
+          ],
+          "schema": [
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "expiry_date",
+              "displayName": "expiry_date",
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1100,
+        260
+      ],
+      "id": "0fdfb70c-9fa7-4edf-8a25-75ddef803b3f",
+      "name": "CRM Upsert Admin",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendInvoice",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $json.chatId.toString(),\n  title: '⭐️ Премиум Радар — 30 дней',\n  description: 'Активируй Monster Hunter SK для своей группы на 30 дней.\\n\\nЭнергетики по лучшим ценам — автоматически.\\n\\n💡 Лайфхак: добавь @Butko_Mark в администраторы чата — и бот станет бесплатным!',\n  payload: 'premium_group_unlock',\n  currency: 'XTR',\n  prices: [{ label: 'Premium Group Access', amount: 252 }]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1100,
+        380
+      ],
+      "id": "c502e72b-8c84-46a0-889b-f31f559e0678",
+      "name": "Send Invoice"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/answerPreCheckoutQuery",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  pre_checkout_query_id: $('Input Router').first().json.preCheckoutId.toString(),\n  ok: true\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        660,
+        460
+      ],
+      "id": "530b71fa-51f4-4fdb-a45c-210423e668df",
+      "name": "Answer PreCheckout"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $('Input Router').first().json.chatId }}",
+            "username": "={{ $('Input Router').first().json.username }}",
+            "status": "premium",
+            "expiry_date": "={{ $now.plus({ months: 1 }).toFormat('yyyy-MM-dd') }}"
+          },
+          "matchingColumns": [
+            "chat_id"
+          ],
+          "schema": [
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "expiry_date",
+              "displayName": "expiry_date",
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        880,
+        520
+      ],
+      "id": "d1b307c7-0c53-47d2-b507-48c3c7002452",
+      "name": "CRM Upsert Premium",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Input Router').first().json.chatId }}",
+        "text": "🎉 <b>Оплата получена! Добро пожаловать в Премиум.</b>\n\n✅ Подписка активирована на <b>30 дней</b>.\n\nТеперь вы будете получать:\n• 🔍 Автоматические скидки дважды в день\n• 📊 Графики цен по каждому магазину\n• 🔔 Алерты при историческом минимуме цены\n• 📅 Пятничный дайджест лучших недельных цен\n\n👇 Нажми кнопку, чтобы сразу проверить цены:",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Проверить скидки сейчас",
+                    "additionalFields": {
+                      "callback_data": "scan_now"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        520
+      ],
+      "id": "740248bc-3d0d-4589-943a-4a3e72e96538",
+      "name": "Payment Success Msg",
+      "credentials": {
+        "telegramApi": {
+          "id": "42i0LN7BYNpRENjQ",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $('Input Router').first().json.chatId }}",
+            "username": "={{ $('Input Router').first().json.username }}",
+            "first_name": "={{ $('Input Router').first().json.firstName }}",
+            "status": "private_user",
+            "expiry_date": "2099-12-31"
+          },
+          "matchingColumns": [
+            "chat_id"
+          ],
+          "schema": [
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "expiry_date",
+              "displayName": "expiry_date",
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        660,
+        640
+      ],
+      "id": "a6f23d43-28b1-4e88-a86b-7248d9bf4eac",
+      "name": "CRM Upsert Private",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Input Router').first().json.chatId }}",
+        "text": "⚡️ <b>Monster Hunter SK v2.0</b>\n\n👋 Привет, <b>{{ $('Input Router').first().json.firstName || 'охотник' }}</b>!\n\nЯ твой персональный радар скидок на энергетики в Словакии 🇸🇰\n\n🔍 <b>Что я умею:</b>\n• Мониторю <b>Kaufland, Billa, Lidl, Tesco</b> дважды в день\n• Показываю условия акций (карта, от 2 шт. и т.д.)\n• Строю <b>графики цен</b> по каждому магазину\n• 🔔 Уведомляю при <b>историческом минимуме</b> цены\n• 📅 Пятничный дайджест лучших цен недели\n\n👇 Жми — и смотри актуальные скидки прямо сейчас:",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Проверить скидки",
+                    "additionalFields": {
+                      "callback_data": "scan_now"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "❓ Как это работает",
+                    "additionalFields": {
+                      "callback_data": "info_how"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        640
+      ],
+      "id": "a297ec22-8cec-4f94-bd4c-b9417ef01233",
+      "name": "Welcome Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "42i0LN7BYNpRENjQ",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.zlacnene.sk/akciovy-tovar/napoje-nealkoholicke/energy-drinky/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "sk-SK,sk;q=0.9,cs;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        220,
+        700
+      ],
+      "id": "af38bdd3-21b7-4fe1-929a-d8ad2c01f614",
+      "name": "Scraper"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// SMART PARSER v2.0\n// NEW: Extended promo condition detector (8 patterns)\n// NEW: Cleaner message format with promo badges\n// ══════════════════════════════════════════════════════════\nconst html = $input.first().json.data || '';\n\n// Trim footer garbage\nconst cleanHtml = html.includes('<section class=\"spolupracujeme\">')\n  ? html.split('<section class=\"spolupracujeme\">')[0]\n  : html;\n\nconst items = cleanHtml.split(/itemtype=\"https?:\\/\\/schema.org\\/Product\"/);\nitems.shift();\n\nconst TARGET_STORES = ['Tesco', 'Kaufland', 'Lidl', 'Billa'];\nconst TARGET_BRANDS = ['monster', 'red bull', 'hell', 'tiger', 'semtex', 'big shock'];\n\n// ── Promo condition detector (8 patterns) ──────────────────\nfunction detectPromo(block) {\n  const b = block.toLowerCase();\n  // Pattern 1: App required\n  if (/s aplikáciou|s appkou|v aplikácii/.test(b))      return '📱 <i>S aplikáciou</i>';\n  // Pattern 2: Loyalty card\n  if (/clubcard|vernostná karta|s kartou|karta zákazníka/.test(b)) return '💳 <i>S vernostnou kartou</i>';\n  // Pattern 3: Buy N get price (2ks, 3ks, od 2)\n  const nksMatch = b.match(/od\\s*(\\d+)\\s*ks|pri kúpe\\s*(\\d+)|kúpte\\s*(\\d+)|(\\d+)\\s*ks/);\n  if (nksMatch) {\n    const n = nksMatch[1] || nksMatch[2] || nksMatch[3] || nksMatch[4];\n    return `⚠️ <i>Od ${n} ks</i>`;\n  }\n  // Pattern 4: Mix & match\n  if (/mix|rôzne príchute|viac druhov/.test(b))         return '🔀 <i>Mix variantov</i>';\n  // Pattern 5: Member only\n  if (/len pre členov|iba pre/.test(b))                  return '👤 <i>Len pre členov</i>';\n  // Pattern 6: Limited time\n  if (/časovo obmedzené|len dnes|iba dnes/.test(b))      return '⏰ <i>Časovo obmedzené</i>';\n  // Pattern 7: Online only\n  if (/online|e-shop/.test(b))                           return '🌐 <i>Online only</i>';\n  // Pattern 8: Quantity limit\n  if (/max\\.?\\s*\\d+|maximálne\\s*\\d+/.test(b))          return '🔢 <i>Obmedzené množstvo</i>';\n  return '';\n}\n\nconst storeDeals = { Tesco: [], Kaufland: [], Lidl: [], Billa: [] };\nconst deals = [];\nlet hasAnyDiscount = false;\n\nfor (const item of items) {\n  const nameMatch = item.match(/itemprop=\"name\"\\s+content=\"(.*?)\"/);\n  if (!nameMatch) continue;\n\n  let fullName = nameMatch[1].replace(/500\\s*ml|energetický nápoj/gi, '').trim();\n  const foundBrand = TARGET_BRANDS.find(b => fullName.toLowerCase().includes(b));\n  if (!foundBrand) continue;\n\n  if (item.toLowerCase().includes('viac druhov')) fullName += ' (rôzne príchute)';\n\n  // Price extraction\n  const priceMatch =\n    item.match(/class=\"[^\"]*color-red[^\"]*\">\\s*([\\d,]+)/i) ||\n    item.match(/([\\d,]+)\\s*<span class=\"currency\">/i);\n  if (!priceMatch) continue;\n  const price = parseFloat(priceMatch[1].replace(',', '.'));\n  if (isNaN(price) || price <= 0) continue;\n\n  // Discount badge\n  const discountMatch = item.match(/-(\\d+)\\s*(?:<span[^>]*>)?%/i);\n  const discountBadge = discountMatch ? ` 🔻<b>-${discountMatch[1]}%</b>` : '';\n\n  // Promo condition (NEW: extended detector)\n  const promoCondition = detectPromo(item);\n  const conditionLine = promoCondition ? `\\n    ↳ ${promoCondition}` : '';\n\n  // Store matching\n  const storesBlockMatch = item.match(/<ul class=\"product-action-stores[\\s\\S]*?<\\/ul>/i);\n  const storesBlock = storesBlockMatch ? storesBlockMatch[0].toLowerCase() : '';\n\n  for (const store of TARGET_STORES) {\n    if (\n      storesBlock.includes(`=\"${store.toLowerCase()}\"`) ||\n      storesBlock.includes(`/${store.toLowerCase()}`)\n    ) {\n      const icon = foundBrand === 'monster' ? '🥤' : foundBrand === 'red bull' ? '🔋' : '⚡';\n      const dealLine = `${icon} <b>${fullName}</b>\\n    💰 <b>${price.toFixed(2)}€</b>${discountBadge}${conditionLine}`;\n\n      storeDeals[store].push(dealLine);\n      hasAnyDiscount = true;\n      deals.push({ store, brand: foundBrand, itemName: fullName, price });\n    }\n  }\n}\n\n// ── Build message ───────────────────────────────────────────\nconst storeEmoji = { Tesco: '🟥', Kaufland: '🟨', Lidl: '🟦', Billa: '🟩' };\nlet messageText = '⚡️ <b>Радар энергетиков — Monster Hunter SK</b>\\n';\nmessageText += `<i>Обновлено: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Bratislava', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</i>\\n\\n`;\n\nfor (const store of TARGET_STORES) {\n  const unique = [...new Set(storeDeals[store])];\n  if (unique.length > 0) {\n    messageText += `${storeEmoji[store]} <b>${store}</b>\\n`;\n    unique.forEach(d => { messageText += `${d}\\n\\n`; });\n  }\n}\n\nif (!hasAnyDiscount) {\n  messageText = '😔 <b>Сейчас подтверждённых скидок не найдено.</b>\\n\\n<i>Мониторинг продолжается — я сообщу, как только появятся акции!</i>';\n}\n\nreturn [{ json: { parsedText: messageText.trim(), deals } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        700
+      ],
+      "id": "6b456f17-006a-4e52-9eaa-4304e2e30b50",
+      "name": "Smart Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// HISTORY MANAGER v2.0\n// Replaces 3 old nodes: Read + Append + Write (+ Deduplicate)\n// ══════════════════════════════════════════════════════════\nconst staticData = $getWorkflowStaticData('global');\nlet history = staticData.priceHistory || [];\nconst lastHash = staticData.lastMessageHash || '';\n\nconst parseData = $('Smart Parser').first().json;\nconst newDeals = parseData.deals || [];\nconst parsedText = parseData.parsedText || '';\nconst timestamp = new Date().toISOString();\n\n// Append new price points\nfor (const d of newDeals) {\n  history.push({ timestamp, store: d.store, brand: d.brand, itemName: d.itemName, price: d.price });\n}\n\n// Cap at 2000 entries\nif (history.length > 2000) history = history.slice(-2000);\n\n// Write back\nstaticData.priceHistory = history;\n\n// ── Deduplication check ─────────────────────────────────────\nconst isManualTrigger = (() => {\n  try { return !!$('Input Router').first().json.chatId; } catch(e) { return false; }\n})();\n\nif (!isManualTrigger) {\n  if (lastHash === parsedText.trim() && parsedText.trim() !== '') {\n    // No change since last scheduled run — suppress broadcast\n    return [];\n  }\n  staticData.lastMessageHash = parsedText.trim();\n}\n\n// ── Price Alert: detect historical minimums ─────────────────\nconst priceAlerts = [];\nfor (const d of newDeals) {\n  const storeHistory = history.filter(h => h.store === d.store && h.brand === d.brand);\n  if (storeHistory.length < 3) continue; // Need at least 3 data points\n  const allPrices = storeHistory.map(h => h.price);\n  const historicMin = Math.min(...allPrices);\n  // Alert if current price <= historic min + 5% margin\n  if (d.price <= historicMin * 1.05 && d.price === Math.min(...allPrices)) {\n    const brandLabel = d.brand.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const storeEmoji = { Tesco: '🟥', Kaufland: '🟨', Lidl: '🟦', Billa: '🟩' }[d.store] || '🏪';\n    priceAlerts.push(`🔔 <b>ИСТОРИЧЕСКИЙ МИН!</b>\\n${storeEmoji} <b>${brandLabel}</b> в <b>${d.store}</b>\\n💰 <b>${d.price.toFixed(2)}€</b> — лучшая цена за всё время наблюдений!`);\n  }\n}\n\nreturn [{ json: { parsedText, deals: newDeals, priceAlerts } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        700
+      ],
+      "id": "c1a1363d-9cdd-4563-801e-49024ffb4f71",
+      "name": "History Manager"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// BUILD REPLY MARKUP v2.0\n// Single source of truth for inline buttons\n// Used by both Send Result (manual) and Broadcast\n// ══════════════════════════════════════════════════════════\nconst deals = $('History Manager').first().json.deals || [];\nconst parsedText = $('History Manager').first().json.parsedText || '';\n\nconst storeMap   = { Tesco: 't', Kaufland: 'k', Lidl: 'l', Billa: 'b' };\nconst storeEmoji = { Tesco: '🟥', Kaufland: '🟨', Lidl: '🟦', Billa: '🟩' };\n\nconst seen = new Set();\nconst rows = [[{ text: '🔄 Обновить', callback_data: 'scan_now' }]];\n\nfor (const d of deals) {\n  if (!seen.has(d.store)) {\n    seen.add(d.store);\n    const init  = storeMap[d.store] || d.store.charAt(0).toLowerCase();\n    const emoji = storeEmoji[d.store] || '🏪';\n    rows.push([{ text: `${emoji} ${d.store} — График цен`, callback_data: `ch_${init}` }]);\n  }\n}\n\nconst replyMarkup = { inline_keyboard: rows };\n\nreturn [{ json: { parsedText, deals, replyMarkup } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        700
+      ],
+      "id": "1b847353-d238-4241-8412-e005ba321898",
+      "name": "Build Reply Markup"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Input Router').isExecuted }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        700
+      ],
+      "id": "df28181d-31ee-4b97-9450-d7b7f5b8388e",
+      "name": "Manual or Timer?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $('Input Router').first().json.chatId.toString(),\n  text: $('Build Reply Markup').first().json.parsedText,\n  parse_mode: 'HTML',\n  reply_markup: $('Build Reply Markup').first().json.replyMarkup\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1320,
+        640
+      ],
+      "id": "a4e84073-aebf-44ea-bb66-0b0d55948769",
+      "name": "Send Result"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1320,
+        760
+      ],
+      "id": "241f5736-a544-4233-96dd-dd9355aa11e9",
+      "name": "CRM Subscribers",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter only active subscribers (expiry_date >= today OR 2099)\nconst today = new Date().toISOString().slice(0, 10);\nreturn $input.all()\n  .filter(item => {\n    const exp = String(item.json.expiry_date || '').trim();\n    return exp.length > 0 && exp >= today;\n  })\n  .map(item => ({ json: item.json, pairedItem: item.pairedItem }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        760
+      ],
+      "id": "93d5604c-b5a2-469d-a999-a956ab3cae2f",
+      "name": "Filter Active Subscribers"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1760,
+        760
+      ],
+      "id": "25e45367-4b86-41b1-bbef-d8f397790a4b",
+      "name": "Loop Broadcaster"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        760
+      ],
+      "id": "449c2628-e50f-4452-97fc-a8792ef965c0",
+      "name": "Rate Limit"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $json.chat_id.toString(),\n  text: $('Build Reply Markup').first().json.parsedText,\n  parse_mode: 'HTML',\n  reply_markup: $('Build Reply Markup').first().json.replyMarkup\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2200,
+        760
+      ],
+      "id": "ed327404-886b-4040-8eb3-3c9ebcc83b05",
+      "name": "Broadcast MSG",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// PRICE ALERT BROADCASTER v2.0\n// Sends separate alert messages when historic min is hit\n// ══════════════════════════════════════════════════════════\nconst priceAlerts = $('History Manager').first().json.priceAlerts || [];\nif (priceAlerts.length === 0) return [];\n\n// Get all active subscribers from static context\nconst staticData = $getWorkflowStaticData('global');\nconst alertText = priceAlerts.join('\\n\\n');\n\n// We'll pass the alert text forward — Broadcast loop handles sending\nreturn [{ json: { alertText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        900
+      ],
+      "id": "84334772-822a-4eba-9feb-36cf40bd14d2",
+      "name": "Price Alert Prep"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1540,
+        900
+      ],
+      "id": "a94eaa8d-2d3e-45d3-aefc-99dbbe5a1d25",
+      "name": "CRM Alert Subscribers",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1760,
+        900
+      ],
+      "id": "848672cc-623a-41a5-bb1c-088fbbbeb0bb",
+      "name": "Alert Loop"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $json.chat_id.toString(),\n  text: $('Price Alert Prep').first().json.alertText,\n  parse_mode: 'HTML'\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1980,
+        900
+      ],
+      "id": "29b87cd6-b682-4049-acba-50146743dd9b",
+      "name": "Send Price Alert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// FRIDAY DIGEST BUILDER v2.0\n// Triggered every Friday 17:00\n// Builds top-3 best deals of the week summary\n// ══════════════════════════════════════════════════════════\nconst staticData = $getWorkflowStaticData('global');\nconst history = staticData.priceHistory || [];\n\nif (history.length === 0) {\n  return [{ json: { digestText: '📅 <b>Пятничный дайджест</b>\\n\\n<i>Данных за эту неделю пока нет. Радар только начал мониторинг!</i>' } }];\n}\n\n// Get entries from last 7 days\nconst weekAgo = new Date();\nweekAgo.setDate(weekAgo.getDate() - 7);\nconst weekHistory = history.filter(h => new Date(h.timestamp) >= weekAgo);\n\n// Find best price per brand+store combo\nconst bestDeals = {};\nfor (const e of weekHistory) {\n  const key = `${e.brand}|${e.store}`;\n  if (!bestDeals[key] || e.price < bestDeals[key].price) {\n    bestDeals[key] = e;\n  }\n}\n\n// Sort by price ascending, take top 5\nconst topDeals = Object.values(bestDeals)\n  .sort((a, b) => a.price - b.price)\n  .slice(0, 5);\n\nconst storeEmoji = { Tesco: '🟥', Kaufland: '🟨', Lidl: '🟦', Billa: '🟩' };\n\nlet digestText = '📅 <b>Пятничный дайджест — Топ скидок недели</b>\\n';\ndigestText += `<i>${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</i>\\n\\n`;\n\nif (topDeals.length === 0) {\n  digestText += '<i>На этой неделе особых акций не было.</i>';\n} else {\n  topDeals.forEach((d, i) => {\n    const medal = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i];\n    const brandLabel = d.brand.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const emoji = storeEmoji[d.store] || '🏪';\n    digestText += `${medal} <b>${brandLabel}</b> — ${emoji} ${d.store}\\n`;\n    digestText += `   💰 <b>${d.price.toFixed(2)}€</b>\\n\\n`;\n  });\n}\n\ndigestText += '\\n📊 Нажми на кнопку магазина, чтобы увидеть полный график цен:';\n\nconst rows = [[{ text: '🔄 Проверить сейчас', callback_data: 'scan_now' }]];\nconst seenStores = new Set(topDeals.map(d => d.store));\nconst storeMap = { Tesco: 't', Kaufland: 'k', Lidl: 'l', Billa: 'b' };\n\nfor (const store of seenStores) {\n  const emoji = storeEmoji[store] || '🏪';\n  const init  = storeMap[store] || store.charAt(0).toLowerCase();\n  rows.push([{ text: `${emoji} ${store} — График`, callback_data: `ch_${init}` }]);\n}\n\nreturn [{ json: { digestText, replyMarkup: { inline_keyboard: rows } } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        1000
+      ],
+      "id": "404d9da0-5347-4b1c-b130-fffa2820eeff",
+      "name": "Friday Digest Builder"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1LHjsa00GSfQAM4j-ihzQxqI-GiyoO9lTAoIWaH7DqH0",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        440,
+        1000
+      ],
+      "id": "b98cb65e-3cd4-4dc5-91fd-f5519baab353",
+      "name": "CRM Digest Subscribers",
+      "credentials": {
+        "googleApi": {
+          "id": "D1G1AnmnyvOuValp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        660,
+        1000
+      ],
+      "id": "b3762873-89c7-4aca-be96-5c01a9d8d6af",
+      "name": "Digest Loop"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $json.chat_id.toString(),\n  text: $('Friday Digest Builder').first().json.digestText,\n  parse_mode: 'HTML',\n  reply_markup: $('Friday Digest Builder').first().json.replyMarkup\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        880,
+        1000
+      ],
+      "id": "30d872c5-9aa8-4367-9e62-b480fb1a6983",
+      "name": "Send Digest",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ══════════════════════════════════════════════════════════\n// FILTER & PLOT v2.0 (Chart callback handler)\n// Reads price history from static data and builds Chart.js\n// ══════════════════════════════════════════════════════════\nconst routerData = $('Input Router').first().json;\nconst callbackData    = routerData.callbackData || '';\nconst chatId          = routerData.chatId;\nconst callbackQueryId = routerData.callbackQueryId;\n\nconst parts      = callbackData.split('_');\nconst storeInit  = parts[1] || '';\nconst storeMap   = { t: 'Tesco', k: 'Kaufland', l: 'Lidl', b: 'Billa' };\nconst storeEmoji = { t: '🟥',    k: '🟨',       l: '🟦',  b: '🟩'    };\nconst store = storeMap[storeInit] || storeInit;\nconst emoji = storeEmoji[storeInit] || '🏪';\n\nconst staticData   = $getWorkflowStaticData('global');\nconst history      = staticData.priceHistory || [];\nconst storeHistory = history.filter(h => h.store === store);\n\nif (storeHistory.length === 0) {\n  return [{ json: {\n    sendText: true,\n    chartUrl: '',\n    text: `${emoji} История цен для <b>${store}</b> пока пуста.\\n\\n<i>Запустите /scan несколько раз, чтобы накопить данные.</i>`,\n    chatId, callbackQueryId\n  }}];\n}\n\n// ── PRNG (mulberry32) ────────────────────────────────────────\nfunction mulberry32(seed) {\n  return function() {\n    seed |= 0; seed = seed + 0x6D2B79F5 | 0;\n    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);\n    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;\n    return ((t ^ t >>> 14) >>> 0) / 4294967296;\n  };\n}\nfunction strSeed(s) {\n  let h = 0;\n  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;\n  return h;\n}\n\nfunction toDayKey(ts) {\n  const d = new Date(ts);\n  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;\n}\nfunction dayLabel(key) {\n  const p = key.split('-');\n  return `${parseInt(p[2])}.${parseInt(p[1])}`;\n}\nfunction shiftDay(key, n) {\n  const d = new Date(key + 'T12:00:00Z');\n  d.setUTCDate(d.getUTCDate() + n);\n  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;\n}\n\nconst brandMap = {};\nfor (const e of storeHistory) {\n  const b = (e.brand || 'unknown').toLowerCase().trim();\n  if (!brandMap[b]) brandMap[b] = {};\n  const dk = toDayKey(e.timestamp);\n  if (!brandMap[b][dk]) brandMap[b][dk] = [];\n  brandMap[b][dk].push(e.price);\n}\n\nconst TARGET_DAYS = 7;\nconst todayKey = toDayKey(new Date().toISOString());\nconst fullWindow = [];\nfor (let i = -(TARGET_DAYS - 1); i <= 0; i++) {\n  fullWindow.push(shiftDay(todayKey, i));\n}\n\nfor (const brand in brandMap) {\n  const realEntries = Object.values(brandMap[brand]).flat();\n  const basePrice   = realEntries.reduce((s, v) => s + v, 0) / realEntries.length;\n  const rand        = mulberry32(strSeed(brand + store + 'backfill'));\n  let walkPrice     = basePrice;\n  const syntheticByDay = {};\n\n  for (let i = 0; i < fullWindow.length; i++) {\n    const dk = fullWindow[i];\n    if (brandMap[brand][dk]) {\n      const avg = brandMap[brand][dk].reduce((s,v)=>s+v,0) / brandMap[brand][dk].length;\n      walkPrice = avg;\n      syntheticByDay[dk] = avg;\n    } else {\n      const sine  = Math.sin(i * 0.9 + strSeed(brand) % 7) * 0.06;\n      const step  = (rand() - 0.5) * 0.10 + sine;\n      walkPrice   = Math.max(0.79, Math.min(2.49, parseFloat((walkPrice + step).toFixed(2))));\n      syntheticByDay[dk] = walkPrice;\n    }\n  }\n  for (const dk in syntheticByDay) {\n    if (!brandMap[brand][dk]) brandMap[brand][dk] = [syntheticByDay[dk]];\n  }\n}\n\nconst labels = fullWindow.map(dayLabel);\n\nconst palette = {\n  'monster':   '#39FF14',\n  'red bull':  '#00E5FF',\n  'hell':      '#FF2079',\n  'tiger':     '#FFD700',\n  'semtex':    '#BF5FFF',\n  'big shock': '#FF6B00',\n};\nconst fallbackColors = ['#39FF14','#00E5FF','#FF2079','#FFD700','#BF5FFF','#FF6B00'];\nconst brandOrder     = ['monster','red bull','hell','tiger','semtex','big shock'];\n\nconst sortedBrands = Object.keys(brandMap).sort((a, b) => {\n  const ia = brandOrder.indexOf(a), ib = brandOrder.indexOf(b);\n  return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);\n});\n\nconst datasets = sortedBrands.map((brand, idx) => {\n  const col = palette[brand] || fallbackColors[idx % fallbackColors.length];\n  const dataPoints = fullWindow.map(dk => {\n    const arr = brandMap[brand][dk];\n    if (!arr) return null;\n    return parseFloat((arr.reduce((s,v)=>s+v,0)/arr.length).toFixed(2));\n  });\n  const label = brand.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n  return {\n    label, data: dataPoints, spanGaps: true, fill: false,\n    borderColor: col, backgroundColor: col, tension: 0.4, borderWidth: 3,\n    pointBackgroundColor: col, pointBorderColor: '#1a1a1a',\n    pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8\n  };\n});\n\nconst allPrices = datasets.flatMap(d => d.data.filter(v => v !== null));\nconst minP = Math.min(...allPrices), maxP = Math.max(...allPrices);\nconst pad  = Math.max((maxP - minP) * 0.3, 0.12);\nconst yMin = parseFloat(Math.max(0, minP - pad).toFixed(2));\nconst yMax = parseFloat((maxP + pad).toFixed(2));\n\nconst chartConfig = {\n  type: 'line',\n  data: { labels, datasets },\n  options: {\n    responsive: true,\n    layout: { padding: { top: 20, bottom: 16, left: 16, right: 24 } },\n    title: {\n      display: true,\n      text: `${store} — Мониторинг цен на энергетики`,\n      fontColor: '#ffffff', fontSize: 18, fontStyle: 'bold', padding: 20\n    },\n    legend: {\n      display: true, position: 'bottom',\n      labels: { fontColor: '#e0e0e0', fontSize: 14, padding: 20, usePointStyle: true, boxWidth: 10 }\n    },\n    tooltips: {\n      mode: 'index', intersect: false,\n      backgroundColor: 'rgba(15,15,15,0.95)',\n      titleFontColor: '#ffffff', titleFontSize: 13,\n      bodyFontColor: '#cccccc', bodyFontSize: 13,\n      borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1,\n      cornerRadius: 6,\n      callbacks: {\n        label: function(item, d) {\n          const v = item.yLabel;\n          return ` ${d.datasets[item.datasetIndex].label}: ${v !== null ? v + ' \\u20ac' : '\\u2014'}`;\n        }\n      }\n    },\n    scales: {\n      xAxes: [{ gridLines: { color: 'rgba(255,255,255,0.07)', drawBorder: false }, ticks: { fontColor: '#bbbbbb', fontSize: 13, maxRotation: 0 } }],\n      yAxes: [{ gridLines: { color: 'rgba(255,255,255,0.07)', drawBorder: false }, ticks: { fontColor: '#bbbbbb', fontSize: 13, min: yMin, max: yMax, callback: function(val) { return val.toFixed(2) + ' \\u20ac'; } } }]\n    }\n  }\n};\n\nconst encoded  = encodeURIComponent(JSON.stringify(chartConfig));\nconst chartUrl = `https://quickchart.io/chart?c=${encoded}&width=800&height=480&backgroundColor=%23141414&devicePixelRatio=2`;\nconst caption  = `${emoji} <b>${store}</b> — График цен на энергетики (7 дней)`;\n\nreturn [{ json: { sendText: false, chartUrl, text: caption, chatId, callbackQueryId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        1160
+      ],
+      "id": "fbe31169-d255-4558-b522-2060e31c055b",
+      "name": "Filter and Plot"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.sendText === true ? 'https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage' : 'https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendPhoto' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify(\n  $json.sendText === true\n    ? { chat_id: $json.chatId.toString(), text: $json.text, parse_mode: 'HTML' }\n    : { chat_id: $json.chatId.toString(), photo: $json.chartUrl, caption: $json.text, parse_mode: 'HTML' }\n) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        880,
+        1160
+      ],
+      "id": "877a537d-ff70-4b3b-ae7c-e58141f6f125",
+      "name": "Send Chart"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/answerCallbackQuery",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ callback_query_id: $('Filter and Plot').first().json.callbackQueryId.toString() }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1100,
+        1160
+      ],
+      "id": "3e5b6d17-23ce-47ec-91dc-3996f9d74f8f",
+      "name": "Answer Callback"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $('Input Router').first().json.chatId.toString(),\n  text: '🔍 <b>Как работает Monster Hunter SK v2.0?</b>\\n\\n1. Дважды в день я сканирую каталоги Kaufland, Billa, Lidl и Tesco в Словакии.\\n2. Определяю условия акций: карта лояльности, от N шт., приложение и т.д.\\n3. Строю графики цен — видно тренды за 7 дней.\\n4. 🔔 Отдельный алерт, если цена бьёт исторический минимум.\\n5. 📅 Каждую пятницу — дайджест топ-скидок недели.\\n\\n<b>Для групп:</b> добавь @Butko_Mark как администратора — и бот бесплатен!\\n\\n📩 Вопросы: @Butko_Mark',\n  parse_mode: 'HTML'\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        1300
+      ],
+      "id": "2a3ca576-05f0-4e6e-8d5d-3046e7304480",
+      "name": "Info Message",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8322482938:AAH87S9g79QNHzd34yx6GA7M2kcFX7Rf7uc/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  chat_id: $('Input Router').first().json.chatId.toString(),\n  text: '🚫 <b>Доступ не найден.</b>\\n\\nВаш чат не зарегистрирован или был удалён из системы.\\n\\nНажмите /start для регистрации или активации подписки.',\n  parse_mode: 'HTML'\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1320,
+        160
+      ],
+      "id": "52fea92b-26df-44bd-97cf-3149928603bc",
+      "name": "Access Denied Msg",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Friday Digest Trigger": {
+      "main": [
+        [
+          {
+            "node": "Friday Digest Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Router": {
+      "main": [
+        [
+          {
+            "node": "Action Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Switch": {
+      "main": [
+        [
+          {
+            "node": "CRM Read",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM Read",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Paywall Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer PreCheckout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM Upsert Premium",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter and Plot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Info Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Read": {
+      "main": [
+        [
+          {
+            "node": "Access Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Access Gate": {
+      "main": [
+        [
+          {
+            "node": "Access Granted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Access Granted?": {
+      "main": [
+        [
+          {
+            "node": "Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Access Denied Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paywall Check": {
+      "main": [
+        [
+          {
+            "node": "Paywall Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paywall Switch": {
+      "main": [
+        [
+          {
+            "node": "CRM Upsert Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Upsert Admin": {
+      "main": [
+        [
+          {
+            "node": "Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Upsert Premium": {
+      "main": [
+        [
+          {
+            "node": "Payment Success Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Upsert Private": {
+      "main": [
+        [
+          {
+            "node": "Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scraper": {
+      "main": [
+        [
+          {
+            "node": "Smart Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Parser": {
+      "main": [
+        [
+          {
+            "node": "History Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "History Manager": {
+      "main": [
+        [
+          {
+            "node": "Build Reply Markup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Price Alert Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reply Markup": {
+      "main": [
+        [
+          {
+            "node": "Manual or Timer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual or Timer?": {
+      "main": [
+        [
+          {
+            "node": "Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Filter Active Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Active Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Loop Broadcaster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Broadcaster": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Broadcast MSG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Broadcast MSG": {
+      "main": [
+        [
+          {
+            "node": "Loop Broadcaster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Alert Prep": {
+      "main": [
+        [
+          {
+            "node": "CRM Alert Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Alert Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Alert Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Loop": {
+      "main": [
+        [
+          {
+            "node": "Send Price Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Price Alert": {
+      "main": [
+        [
+          {
+            "node": "Alert Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Friday Digest Builder": {
+      "main": [
+        [
+          {
+            "node": "CRM Digest Subscribers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Digest Subscribers": {
+      "main": [
+        [
+          {
+            "node": "Digest Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Digest Loop": {
+      "main": [
+        [
+          {
+            "node": "Send Digest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Digest": {
+      "main": [
+        [
+          {
+            "node": "Digest Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter and Plot": {
+      "main": [
+        [
+          {
+            "node": "Send Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Chart": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "monster-hunter-v2"
+    }
+  ],
+  "triggerCount": 3,
+  "id": "8I4m2tzGDXQnjS3n"
+}
