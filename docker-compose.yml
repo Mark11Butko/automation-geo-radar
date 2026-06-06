@@ -16,3 +16,14 @@ services:
     volumes:
       - ./n8n_data:/home/node/.n8n
       - ./database:/data
+
+  dashboard:
+    build: ./dashboard
+    container_name: dashboard_open_source
+    restart: always
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./database:/app/database
+    depends_on:
+      - n8n
